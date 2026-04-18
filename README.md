@@ -1,8 +1,8 @@
 # 🛡️ Advanced Driver Fatigue Monitor
 
-[](https://www.python.org/)
-[](https://mediapipe.dev/)
-[](https://opencv.org/)
+[Pyhton](https://www.python.org/)
+[Mediapipe](https://mediapipe.dev/)
+[opencv](https://opencv.org/)
 
 An advanced, real-time computer vision system designed to detect driver drowsiness and fatigue. Unlike basic distance-based trackers, this system utilizes **Eye Aspect Ratio (EAR)** and **Mouth Aspect Ratio (MAR)** to provide a robust, non-intrusive safety solution.
 
