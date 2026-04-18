@@ -51,7 +51,7 @@ Detects the vertical expansion of the lips relative to the horizontal width to i
 3.  **Run the application:**
 
     ```bash
-    python main.py
+    python alert.py
     ```
 
     *Press `ESC` to exit the application.*
