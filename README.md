@@ -38,8 +38,8 @@ Detects the vertical expansion of the lips relative to the horizontal width to i
 1.  **Clone the repository:**
 
     ```bash
-    git clone https://github.com/your-username/fatigue-monitor.git
-    cd fatigue-monitor
+    git clone https://github.com/Rahi1108/Driver-Drowsiness-Alert.git
+    cd Driver-Drowsiness-Alert
     ```
 
 2.  **Install dependencies:**
