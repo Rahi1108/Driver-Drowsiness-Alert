@@ -1,83 +1,112 @@
 import cv2
 import mediapipe as mp
-import math
+import numpy as np
 import time
-import winsound  # Built-in Windows library for sound
+import winsound
+
+# --- CONSTANTS & THRESHOLDS ---
+# Eye Aspect Ratio thresholds
+EAR_THRESHOLD = 0.21  
+CONSECUTIVE_FRAMES = 20 # Number of frames to confirm eyes are closed
+
+# Mouth Aspect Ratio thresholds (Yawn detection)
+MAR_THRESHOLD = 0.5
+YAWN_TIME_LIMIT = 1.0 
+
+# Colors (BGR)
+CYAN = (255, 255, 0)
+YELLOW = (0, 255, 255)
+RED = (0, 0, 255)
+GREEN = (0, 255, 0)
+
+# --- MEDIAPIPE ASSETS ---
+mp_face_mesh = mp.solutions.face_mesh
+# Landmark indices for EAR and MAR
+LEFT_EYE = [362, 385, 387, 263, 373, 380]
+RIGHT_EYE = [33, 160, 158, 133, 153, 144]
+MOUTH = [13, 14, 78, 308] # Upper lip, lower lip, left corner, right corner
+
+def calculate_ear(landmarks, eye_indices):
+    # Vertical distances
+    v1 = np.linalg.norm(np.array([landmarks[eye_indices[1]].x, landmarks[eye_indices[1]].y]) - 
+                        np.array([landmarks[eye_indices[5]].x, landmarks[eye_indices[5]].y]))
+    v2 = np.linalg.norm(np.array([landmarks[eye_indices[2]].x, landmarks[eye_indices[2]].y]) - 
+                        np.array([landmarks[eye_indices[4]].x, landmarks[eye_indices[4]].y]))
+    # Horizontal distance
+    h = np.linalg.norm(np.array([landmarks[eye_indices[0]].x, landmarks[eye_indices[0]].y]) - 
+                       np.array([landmarks[eye_indices[3]].x, landmarks[eye_indices[3]].y]))
+    return (v1 + v2) / (2.0 * h)
+
+def calculate_mar(landmarks, mouth_indices):
+    # Vertical distance (center of lips)
+    v = np.linalg.norm(np.array([landmarks[mouth_indices[0]].x, landmarks[mouth_indices[0]].y]) - 
+                       np.array([landmarks[mouth_indices[1]].x, landmarks[mouth_indices[1]].y]))
+    # Horizontal distance (corners of mouth)
+    h = np.linalg.norm(np.array([landmarks[mouth_indices[2]].x, landmarks[mouth_indices[2]].y]) - 
+                       np.array([landmarks[mouth_indices[3]].x, landmarks[mouth_indices[3]].y]))
+    return v / h
 
 # --- INITIALIZATION ---
-mp_drawing = mp.solutions.drawing_utils
-mp_face_mesh = mp.solutions.face_mesh
-
-RIGHT_EYE_TOP = 159
-RIGHT_EYE_BOTTOM = 145
-
-# --- CONFIGURATION ---
-EYE_AR_THRESHOLD = 0.012  # Threshold for closed eyes
-DROWSY_TIME_LIMIT = 1.5   # Seconds before alarm sounds
-NEON_CYAN = (255, 255, 0)
-ALARM_RED = (0, 0, 255)
-
-def get_distance(p1, p2):
-    return math.sqrt((p1.x - p2.x)**2 + (p1.y - p2.y)**2)
-
-# Timer variables
-eye_closed_start_time = 0
-is_eye_closed = False
-
 cap = cv2.VideoCapture(0)
+frame_counter = 0
+yawn_start_time = 0
+is_yawning = False
 
-with mp_face_mesh.FaceMesh(
-    max_num_faces=1,
-    refine_landmarks=True,
-    min_detection_confidence=0.7,
-    min_tracking_confidence=0.7) as face_mesh:
-
+with mp_face_mesh.FaceMesh(refine_landmarks=True) as face_mesh:
     while cap.isOpened():
-        success, image = cap.read()
-        if not success: continue
+        success, frame = cap.read()
+        if not success: break
 
-        image = cv2.flip(image, 1)
-        h, w, _ = image.shape
-        results = face_mesh.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+        frame = cv2.flip(frame, 1)
+        h, w, _ = frame.shape
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        results = face_mesh.process(rgb_frame)
 
         if results.multi_face_landmarks:
             for face_landmarks in results.multi_face_landmarks:
-                # 1. Calculate Eye Distance
-                p_top = face_landmarks.landmark[RIGHT_EYE_TOP]
-                p_bottom = face_landmarks.landmark[RIGHT_EYE_BOTTOM]
-                dist = get_distance(p_top, p_bottom)
+                landmarks = face_landmarks.landmark
+                
+                # 1. EAR Calculation
+                left_ear = calculate_ear(landmarks, LEFT_EYE)
+                right_ear = calculate_ear(landmarks, RIGHT_EYE)
+                avg_ear = (left_ear + right_ear) / 2.0
 
-                # 2. Drowsiness Logic
-                if dist < EYE_AR_THRESHOLD:
-                    if not is_eye_closed:
-                        # Eye just closed, start the timer
-                        eye_closed_start_time = time.time()
-                        is_eye_closed = True
-                    
-                    # Calculate how long eyes have been closed
-                    elapsed_time = time.time() - eye_closed_start_time
-                    
-                    if elapsed_time >= DROWSY_TIME_LIMIT:
-                        # TRIGGER ALARM
-                        cv2.putText(image, "!!! WAKE UP !!!", (w//2 - 150, h//2), 
-                                    cv2.FONT_HERSHEY_TRIPLEX, 1.5, ALARM_RED, 3)
-                        # winsound.Beep(Frequency, Duration_in_ms)
-                        winsound.Beep(1000, 100) 
+                # 2. MAR Calculation (Yawn)
+                mar = calculate_mar(landmarks, MOUTH)
+
+                # --- DROWSINESS LOGIC ---
+                if avg_ear < EAR_THRESHOLD:
+                    frame_counter += 1
+                    if frame_counter >= CONSECUTIVE_FRAMES:
+                        cv2.putText(frame, "DROWSINESS DETECTED!", (50, 100), 
+                                    cv2.FONT_HERSHEY_SIMPLEX, 1, RED, 3)
+                        winsound.Beep(1500, 200)
                 else:
-                    # Eye is open, reset timer logic
-                    is_eye_closed = False
-                    eye_closed_start_time = 0
+                    frame_counter = 0
 
-                # 3. Aesthetics (Mesh)
-                mp_drawing.draw_landmarks(
-                    image=image,
-                    landmark_list=face_landmarks,
-                    connections=mp_face_mesh.FACEMESH_TESSELATION,
-                    landmark_drawing_spec=None,
-                    connection_drawing_spec=mp_drawing.DrawingSpec(
-                        color=NEON_CYAN, thickness=1, circle_radius=0))
+                # --- YAWN LOGIC ---
+                if mar > MAR_THRESHOLD:
+                    if not is_yawning:
+                        yawn_start_time = time.time()
+                        is_yawning = True
+                    
+                    if (time.time() - yawn_start_time) > YAWN_TIME_LIMIT:
+                        cv2.putText(frame, "YAWN ALERT!", (50, 150), 
+                                    cv2.FONT_HERSHEY_SIMPLEX, 1, YELLOW, 2)
+                else:
+                    is_yawning = False
 
-        cv2.imshow('Drowsiness Alert System', image)
+                # --- ADVANCED HUD (No Mesh) ---
+                # Draw subtle indicators only for eyes/mouth
+                for idx in LEFT_EYE + RIGHT_EYE:
+                    pt = landmarks[idx]
+                    cv2.circle(frame, (int(pt.x * w), int(pt.y * h)), 1, GREEN, -1)
+                
+                # Display Stats
+                cv2.putText(frame, f"EAR: {avg_ear:.2f}", (w-150, 30), cv2.FONT_HERSHEY_PLAIN, 1.5, CYAN, 2)
+                cv2.putText(frame, f"MAR: {mar:.2f}", (w-150, 60), cv2.FONT_HERSHEY_PLAIN, 1.5, CYAN, 2)
+
+        cv2.imshow('Advanced Driver Fatigue Monitor', frame)
         if cv2.waitKey(5) & 0xFF == 27: break
 
 cap.release()
