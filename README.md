@@ -1,9 +1,5 @@
 # 🛡️ Advanced Driver Fatigue Monitor
 
-![Pyhton](https://www.python.org/)
-![Mediapipe](https://mediapipe.dev/)
-![opencv](https://opencv.org/)
-
 ![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)
 ![OpenCV](https://img.shields.io/badge/opencv-%23white.svg?style=for-the-badge&logo=opencv&logoColor=white)
 ![MediaPipe](https://img.shields.io/badge/MediaPipe-00a0a0?style=for-the-badge&logo=google&logoColor=white)
